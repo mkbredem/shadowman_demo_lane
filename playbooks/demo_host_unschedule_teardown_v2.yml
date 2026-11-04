@@ -1,0 +1,39 @@
+---
+# Last step of the workflow "Datadog Demo Host Teardown_v2" (tracker step A3).
+#
+# Deletes the one-time schedule "Teardown <vm_name>" that the build created.
+# A one-time schedule stays in AAP after it runs, and a teardown run early by
+# hand would otherwise still fire on the scheduled morning. When the schedule
+# launched this teardown, deleting it here does not affect the running job.
+# If there is no such schedule, nothing changes.
+#
+# Input: vm_name. Credential: "Automation Controller Credentials".
+- name: Delete the teardown schedule of a demo host (demo lane v2)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    demo_teardown_workflow: "Datadog Demo Host Teardown_v2"
+
+  tasks:
+    - name: Refuse anything that is not a demo lane host name
+      ansible.builtin.assert:
+        that:
+          - vm_name is defined
+          - vm_name is match('^[a-z0-9]+-[0-9]{4}-(ao|classic|ai|aimcp|snowlogs)-datadog\.shadowman\.dev$')
+        fail_msg: "{{ vm_name | default('vm_name (not set)') }} is not a demo lane host name. Nothing changed."
+        quiet: true
+
+    - name: Delete the schedule "Teardown {{ vm_name }}"
+      ansible.controller.schedule:
+        name: "Teardown {{ vm_name }}"
+        unified_job_template: "{{ demo_teardown_workflow }}"
+        state: absent
+      register: demo_unschedule
+
+    - name: Report
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'Deleted' if demo_unschedule.changed else 'No' }} schedule
+          "Teardown {{ vm_name }}"{{ '.' if demo_unschedule.changed else ' existed.' }}
