@@ -32,29 +32,43 @@
           name (<user>-<MMDD>-<flow>-datadog.shadowman.dev). Nothing removed.
         quiet: true
 
+    # vmware.vmware.guest_info returned no VM for this name on Nov 4, 2026
+    # while the VM existed (moid vm-6299), so the lookup uses the vCenter REST
+    # API through the certified vmware.vmware_rest collection.
     - name: Look up the VM in vCenter
-      vmware.vmware.guest_info:
-        name: "{{ vm_name }}"
-        datacenter: "{{ demo_datacenter }}"
-        validate_certs: false
+      vmware.vmware_rest.vcenter_vm_info:
+        names:
+          - "{{ vm_name }}"
+        vcenter_validate_certs: false
       register: demo_vm
+
+    - name: Show what vCenter returned
+      ansible.builtin.debug:
+        var: demo_vm.value
 
     - name: Report when there is no VM to remove
       ansible.builtin.debug:
         msg: "No VM named {{ vm_name }} in vCenter. Nothing to remove."
-      when: demo_vm.guests | length == 0
+      when: demo_vm.value | length == 0
+
+    - name: Stop if more than one VM has this name
+      ansible.builtin.assert:
+        that:
+          - demo_vm.value | length <= 1
+        fail_msg: "{{ demo_vm.value | length }} VMs are named {{ vm_name }}. Remove them by hand."
+        quiet: true
 
     - name: Turn off the VM
       vmware.vmware.vm_powerstate:
-        moid: "{{ demo_vm.guests[0].moid }}"
+        moid: "{{ demo_vm.value[0].vm }}"
         datacenter: "{{ demo_datacenter }}"
         state: powered-off
         validate_certs: false
-      when: demo_vm.guests | length == 1
+      when: demo_vm.value | length == 1
 
     - name: Delete the VM
       vmware.vmware.vm:
         state: absent
-        moid: "{{ demo_vm.guests[0].moid }}"
+        moid: "{{ demo_vm.value[0].vm }}"
         validate_certs: false
-      when: demo_vm.guests | length == 1
+      when: demo_vm.value | length == 1

@@ -18,8 +18,8 @@
 # Credential: "VMWare VCenter Env Cred" (sets VMWARE_HOST, VMWARE_USER and
 # VMWARE_PASSWORD, which the certified vmware.vmware and vmware.vmware_rest
 # modules read). vmware.vmware has no datastore module, so the free-space
-# check uses vmware.vmware_rest; the VM lookup uses vmware.vmware.guest_info,
-# the same module the provisioning role in shadowman-lab/Ansible-Provision uses.
+# check uses vmware.vmware_rest, and so does the VM lookup (vmware.vmware.guest_info
+# returned no VM for an existing name on Nov 4, 2026).
 - name: Plan a Datadog demo host (demo lane v2)
   hosts: localhost
   connection: local
@@ -93,16 +93,16 @@
           {{ ((demo_ds.value[0].free_space | int) / 1024 ** 4) | round(1) }} TB free.
 
     - name: Look for an existing VM with the demo host name
-      vmware.vmware.guest_info:
-        name: "{{ demo_vm_name }}"
-        datacenter: "{{ demo_datacenter }}"
-        validate_certs: false
+      vmware.vmware_rest.vcenter_vm_info:
+        names:
+          - "{{ demo_vm_name }}"
+        vcenter_validate_certs: false
       register: demo_existing
 
     - name: Stop if a VM with the demo host name already exists
       ansible.builtin.assert:
         that:
-          - demo_existing.guests | length == 0
+          - demo_existing.value | length == 0
         fail_msg: >-
           A VM named {{ demo_vm_name }} already exists. Pick another demo date
           or tear down the existing host first.
