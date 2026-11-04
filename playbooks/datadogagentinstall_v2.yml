@@ -1,0 +1,47 @@
+---
+# Copy of datadogagentinstall.yml (job template 842, project SSP Lab Extra Items)
+# for the demo lane. Differences from the original:
+#   - tag env:shadowman_v2 instead of env:shadowman, so only the _v2 monitors
+#     watch these hosts
+#   - datadog_api_key comes from the credential "Datadog API Key_v2", not from
+#     the job template's extra variables
+#   - fails early if the target is not a demo lane host name
+- name: Install Datadog Agent (demo lane v2)
+  hosts: "{{ vm_name }}"
+
+  pre_tasks:
+    - name: Refuse hosts that are not demo lane hosts
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname is search('-(ao|classic|ai|aimcp|snowlogs)-datadog\\.')
+          - datadog_api_key is defined and datadog_api_key | length > 0
+        fail_msg: >-
+          {{ inventory_hostname }} is not a demo lane host, or the credential
+          "Datadog API Key_v2" is not attached to this job template.
+
+  vars:
+    datadog_agent_major_version: 7
+    datadog_config:
+      tags:
+        - "env:shadowman_v2"
+      hostname: "{{ ansible_fqdn }}"
+      log_level: INFO
+      inventories_configuration_enabled: true
+      apm_config:
+        enabled: true
+      logs_enabled: false
+      process_config:
+        enabled: "true"
+        scrub_args: true
+        custom_sensitive_words: ['consul_token', 'dd_api_key']
+      network_config:
+        enabled: true
+    datadog_checks:
+      http_check:
+        init_config:
+        instances:
+          - name: Website
+            url: https://{{ ansible_fqdn }}
+
+  roles:
+    - datadog.dd.agent
