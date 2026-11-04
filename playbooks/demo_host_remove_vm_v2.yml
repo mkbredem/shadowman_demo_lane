@@ -46,6 +46,25 @@
       ansible.builtin.debug:
         var: demo_vm.value
 
+    # Optional: vm_moid (for example vm-6299, from the build job's
+    # "Check RHEL VM Creation status" result) when the name lookup finds
+    # nothing. Shows the VM's current name and power state; deletes nothing.
+    - name: Look up the VM by its vCenter ID
+      vmware.vmware_rest.vcenter_vm_info:
+        vm: "{{ vm_moid }}"
+        vcenter_validate_certs: false
+      register: demo_vm_by_id
+      failed_when: false
+      when: vm_moid is defined
+
+    - name: Show what vCenter returned for that ID
+      ansible.builtin.debug:
+        msg: >-
+          {{ vm_moid }}: name {{ demo_vm_by_id.value.name | default('not found') }},
+          power {{ demo_vm_by_id.value.power_state | default('unknown') }}
+          {{ demo_vm_by_id.msg | default('') }}
+      when: vm_moid is defined
+
     - name: Report when there is no VM to remove
       ansible.builtin.debug:
         msg: "No VM named {{ vm_name }} in vCenter. Nothing to remove."
