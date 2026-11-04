@@ -10,7 +10,7 @@
 # Inputs (workflow survey):
 #   demo_flow  - ao (Phase 1); later ai, aimcp, classic, snowlogs
 #   demo_date  - YYYY-MM-DD, the day of the demo
-#   owner      - optional; defaults to the launching AAP user's email
+#   owner      - required launch variable: the requester's email address
 #
 # Host name: <AAP user name>-<MMDD>-<demo_flow>-datadog.shadowman.dev
 # Hyphens, not underscores: underscores are not valid in DNS host names.
@@ -49,16 +49,23 @@
           launching AAP user must have a user name.
         quiet: true
 
-    - name: Stop if the launching user has no email address in AAP
+    # owner has to be set when the workflow is launched, not here: the survey
+    # of workflow 646 answers owner with a blank value, and a nested
+    # workflow's survey answer takes precedence over set_stats values from
+    # earlier nodes. Only a variable given at launch of "Datadog Demo Host
+    # Build_v2" reaches the jobs inside 646. The reservation (step A5) passes
+    # owner from the reserving user's awx_user_email.
+    - name: Stop if owner was not given when the workflow was launched
       ansible.builtin.assert:
         that:
-          - awx_user_email is defined
-          - awx_user_email | length > 0
+          - owner is defined
+          - owner is match('^[^@ ]+@[^@ ]+$')
         fail_msg: >-
-          The AAP user {{ awx_user_name | default('unknown') }} has no email
-          address. Add one to the user, or launch with the variable owner set.
+          Launch "Datadog Demo Host Build_v2" with the variable owner set to
+          the requester's email address (the reservation does this from
+          awx_user_email). Launched by {{ awx_user_name | default('unknown') }}
+          ({{ awx_user_email | default('no email') }}).
         quiet: true
-      when: owner is not defined
 
     - name: Work out the demo host name
       ansible.builtin.set_fact:
@@ -104,7 +111,7 @@
     - name: Publish the values for the rest of the build
       ansible.builtin.set_stats:
         data:
-          owner: "{{ owner | default(awx_user_email) }}"
+          owner: "{{ owner }}"
           vm_name: "{{ demo_vm_name }}"
           demo_flow: "{{ demo_flow }}"
           demo_date: "{{ demo_date }}"
@@ -113,5 +120,5 @@
     - name: Show the plan
       ansible.builtin.debug:
         msg: >-
-          Building {{ demo_vm_name }} for {{ owner | default(awx_user_email) }},
+          Building {{ demo_vm_name }} for {{ owner }},
           demo flow {{ demo_flow }}, demo date {{ demo_date }}.

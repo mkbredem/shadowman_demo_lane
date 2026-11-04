@@ -1,0 +1,25 @@
+---
+# Node of the workflow "Datadog Demo Host Build_v2" that runs right after
+# "Multi Hypervisor Create and Config VM" (646).
+#
+# Workflow 646 handles a failed VM build on its own failure path and still
+# ends successful, and job templates that target a host that is not in the
+# inventory end successful with "no hosts matched". This check fails the build
+# when the new host is not in the job's inventory (Shadowman Production), so a
+# failed VM build stops the workflow instead of reporting success.
+- name: Check that the demo host was built (demo lane v2)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Stop if the demo host is not in the inventory
+      ansible.builtin.assert:
+        that:
+          - vm_name is defined
+          - vm_name in groups['all']
+        fail_msg: >-
+          {{ vm_name | default('vm_name (not set)') }} is not in the inventory.
+          The VM build in "Multi Hypervisor Create and Config VM" did not
+          finish; check that workflow's jobs.
+        success_msg: "{{ vm_name }} is in the inventory."

@@ -1,0 +1,60 @@
+---
+# Removes a demo lane VM from vCenter by name, from localhost.
+#
+# "Unsubscribe and remove VMs from Multi Citrix" (450) removes VMs through the
+# inventory, so it cannot remove a VM that never reached the inventory. The
+# VMware inventory source only picks up VMs tagged ansible_managed, and a VM
+# build that fails before tagging leaves an untagged VM. This playbook removes
+# such a VM, and the teardown (step A3) uses it as a last step so the VM is
+# gone even when the inventory no longer lists it.
+#
+# Same modules and steps as roles/shadowman_deprovision/tasks/vmware_vm_remove.yml
+# in shadowman-lab/Ansible-Provision (certified vmware.vmware collection).
+#
+# Input: vm_name. Refuses any name that is not a demo lane host name.
+# Credential: "VMWare VCenter Env Cred".
+- name: Remove a demo lane VM from vCenter (demo lane v2)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    demo_datacenter: Shadowman-DC
+
+  tasks:
+    - name: Refuse anything that is not a demo lane host name
+      ansible.builtin.assert:
+        that:
+          - vm_name is defined
+          - vm_name is match('^[a-z0-9]+-[0-9]{4}-(ao|classic|ai|aimcp|snowlogs)-datadog\.shadowman\.dev$')
+        fail_msg: >-
+          {{ vm_name | default('vm_name (not set)') }} is not a demo lane host
+          name (<user>-<MMDD>-<flow>-datadog.shadowman.dev). Nothing removed.
+        quiet: true
+
+    - name: Look up the VM in vCenter
+      vmware.vmware.guest_info:
+        name: "{{ vm_name }}"
+        datacenter: "{{ demo_datacenter }}"
+        validate_certs: false
+      register: demo_vm
+
+    - name: Report when there is no VM to remove
+      ansible.builtin.debug:
+        msg: "No VM named {{ vm_name }} in vCenter. Nothing to remove."
+      when: demo_vm.guests | length == 0
+
+    - name: Turn off the VM
+      vmware.vmware.vm_powerstate:
+        moid: "{{ demo_vm.guests[0].moid }}"
+        datacenter: "{{ demo_datacenter }}"
+        state: powered-off
+        validate_certs: false
+      when: demo_vm.guests | length == 1
+
+    - name: Delete the VM
+      vmware.vmware.vm:
+        state: absent
+        moid: "{{ demo_vm.guests[0].moid }}"
+        validate_certs: false
+      when: demo_vm.guests | length == 1
