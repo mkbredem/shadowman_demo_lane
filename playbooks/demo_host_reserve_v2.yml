@@ -1,0 +1,57 @@
+---
+# Job template "Reserve Datadog Demo Host_v2": the entry point for SSAs
+# (tracker step A5, first part).
+#
+# The build workflow "Datadog Demo Host Build_v2" needs the variable owner at
+# launch: workflow 646's survey answers owner with a blank value, and only a
+# variable given when the outer workflow is launched reaches the jobs inside
+# 646. A user launching the build from the AAP screen would have to type it.
+# This job reads the launching user's name and email from AAP (awx_user_name,
+# awx_user_email) and launches the build with owner set, so nobody types
+# anything but the demo flow and date.
+#
+# Survey: demo_flow, demo_date (YYYY-MM-DD).
+# Credential: "Automation Controller Credentials".
+- name: Reserve a Datadog demo host (demo lane v2)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    demo_build_workflow: "Datadog Demo Host Build_v2"
+
+  tasks:
+    - name: Check the survey answers and the launching user
+      ansible.builtin.assert:
+        that:
+          - demo_flow is defined
+          - demo_date is defined
+          - demo_date is match('^\d{4}-\d{2}-\d{2}$')
+          - awx_user_email is defined
+          - awx_user_email | length > 0
+          - awx_user_name is defined
+        fail_msg: >-
+          Pick a demo flow and a demo date (YYYY-MM-DD). Your AAP user
+          {{ awx_user_name | default('unknown') }} also needs an email address.
+        quiet: true
+
+    - name: Launch the build for the launching user
+      ansible.controller.workflow_launch:
+        name: "{{ demo_build_workflow }}"
+        extra_vars:
+          owner: "{{ awx_user_email }}"
+          demo_requester: "{{ awx_user_name }}"
+          demo_flow: "{{ demo_flow }}"
+          demo_date: "{{ demo_date }}"
+        wait: false
+      register: demo_build
+
+    - name: Show where to follow the build
+      ansible.builtin.debug:
+        msg: >-
+          Building the {{ demo_flow }} demo host for {{ awx_user_name }} (demo
+          date {{ demo_date }}). Follow workflow job {{ demo_build.id }} under
+          Jobs. When it finishes, the host appears in the drop-downs of
+          "AIOps Setup - Break HTTPD_v2" and "AIOps Setup - Cause High CPU for
+          300 seconds_v2", and it is torn down at 6:00 AM Eastern the morning
+          after the demo date.

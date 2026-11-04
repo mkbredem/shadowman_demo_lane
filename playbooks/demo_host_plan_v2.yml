@@ -31,7 +31,10 @@
     demo_datastore: vsanDatastore
     demo_min_free_tb: 10
     demo_domain: shadowman.dev
-    requester: "{{ awx_user_name | default('') | lower | regex_replace('[^a-z0-9]', '') }}"
+    # demo_requester comes from "Reserve Datadog Demo Host_v2", which launches
+    # this workflow with a service credential: awx_user_name would then be the
+    # service account, not the SSA who reserved the host.
+    requester: "{{ demo_requester | default(awx_user_name) | default('') | lower | regex_replace('[^a-z0-9]', '') }}"
 
   tasks:
     - name: Check the survey answers
