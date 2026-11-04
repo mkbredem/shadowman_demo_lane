@@ -11,6 +11,10 @@
 #
 # Activation extra variables:
 #   ao_webhook_path: c8c4e8c2-9a00-4ee2-a1cc-03c5f87a6798   (AIOps Workflow With EDA trigger)
+# Host name check uses "-ao-datadog[.]" (a character class). Backslashes in a
+# YAML block scalar reach the rulebook condition unchanged, so the earlier
+# "-ao-datadog\\." pattern looked for a literal backslash and never matched
+# a host name (found in the first end-to-end test, Nov 4, 2026).
 - name: Datadog demo lane v2
   hosts: all
   sources:
@@ -23,7 +27,7 @@
     - name: AO flow - Web Application Down Detected
       condition: >-
         event.payload.event_title == "[Triggered] Web Server is Down_v2"
-        and event.payload.hostname is search("-ao-datadog\\.", ignorecase=true)
+        and event.payload.hostname is search("-ao-datadog[.]", ignorecase=true)
       action:
         run_job_template:
           name: "EDA Automated Response Automation Orchestrator"
@@ -37,7 +41,7 @@
     - name: AO flow - High CPU Usage Detected
       condition: >-
         event.payload.event_title == "[Triggered] CPU Load is high_v2"
-        and event.payload.hostname is search("-ao-datadog\\.", ignorecase=true)
+        and event.payload.hostname is search("-ao-datadog[.]", ignorecase=true)
       action:
         run_workflow_template:
           name: "Ansible AI Enrichment CPU"
@@ -49,7 +53,7 @@
     - name: Log demo lane alerts that no flow handles
       condition: >-
         event.payload.event_title is defined
-        and not (event.payload.hostname is search("-ao-datadog\\.", ignorecase=true))
+        and not (event.payload.hostname is search("-ao-datadog[.]", ignorecase=true))
       action:
         debug:
           msg: "No demo flow matched {{ event.payload.hostname }}: {{ event.payload.event_title }}"
