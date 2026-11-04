@@ -1,0 +1,117 @@
+---
+# First node of the workflow "Datadog Demo Host Build_v2" (tracker step A2).
+#
+# Works out the demo host name, checks that the build can run, and publishes
+# the values the later nodes need with set_stats. AAP passes set_stats data
+# to every later node as variables, including the nested workflow
+# "Multi Hypervisor Create and Config VM" (646), and it overrides the values
+# saved on the workflow nodes.
+#
+# Inputs (workflow survey):
+#   demo_flow  - ao (Phase 1); later ai, aimcp, classic, snowlogs
+#   demo_date  - YYYY-MM-DD, the day of the demo
+#   owner      - optional; defaults to the launching AAP user's email
+#
+# Host name: <AAP user name>-<MMDD>-<demo_flow>-datadog.shadowman.dev
+# Hyphens, not underscores: underscores are not valid in DNS host names.
+#
+# Credential: "VMWare VCenter Env Cred" (sets VMWARE_HOST, VMWARE_USER and
+# VMWARE_PASSWORD, which the certified vmware.vmware and vmware.vmware_rest
+# modules read). vmware.vmware has no datastore module, so the free-space
+# check uses vmware.vmware_rest; the VM lookup uses vmware.vmware.guest_info,
+# the same module the provisioning role in shadowman-lab/Ansible-Provision uses.
+- name: Plan a Datadog demo host (demo lane v2)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    demo_flows_allowed: [ao]
+    demo_datacenter: Shadowman-DC
+    demo_datastore: vsanDatastore
+    demo_min_free_tb: 10
+    demo_domain: shadowman.dev
+    requester: "{{ awx_user_name | default('') | lower | regex_replace('[^a-z0-9]', '') }}"
+
+  tasks:
+    - name: Check the survey answers
+      ansible.builtin.assert:
+        that:
+          - demo_flow is defined
+          - demo_flow in demo_flows_allowed
+          - demo_date is defined
+          - demo_date is match('^\d{4}-\d{2}-\d{2}$')
+          - (demo_date | to_datetime('%Y-%m-%d')).date() >= now().date()
+          - requester | length > 0
+        fail_msg: >-
+          demo_flow must be one of {{ demo_flows_allowed | join(', ') }},
+          demo_date must be today or later in the form YYYY-MM-DD, and the
+          launching AAP user must have a user name.
+        quiet: true
+
+    - name: Stop if the launching user has no email address in AAP
+      ansible.builtin.assert:
+        that:
+          - awx_user_email is defined
+          - awx_user_email | length > 0
+        fail_msg: >-
+          The AAP user {{ awx_user_name | default('unknown') }} has no email
+          address. Add one to the user, or launch with the variable owner set.
+        quiet: true
+      when: owner is not defined
+
+    - name: Work out the demo host name
+      ansible.builtin.set_fact:
+        demo_vm_name: >-
+          {{ requester }}-{{ (demo_date | to_datetime('%Y-%m-%d')).strftime('%m%d') }}-{{ demo_flow }}-datadog.{{ demo_domain }}
+
+    - name: Read the free space on the datastore the VMware builds use
+      vmware.vmware_rest.vcenter_datastore_info:
+        names:
+          - "{{ demo_datastore }}"
+        vcenter_validate_certs: false
+      register: demo_ds
+
+    - name: Stop if the datastore has less free space than the agreed threshold
+      ansible.builtin.assert:
+        that:
+          - demo_ds.value | length == 1
+          - (demo_ds.value[0].free_space | int) >= (demo_min_free_tb * 1024 ** 4)
+        fail_msg: >-
+          {{ demo_datastore }} has
+          {{ ((demo_ds.value[0].free_space | default(0) | int) / 1024 ** 4) | round(1) }} TB free.
+          Demo hosts are built only when at least {{ demo_min_free_tb }} TB is free.
+        success_msg: >-
+          {{ demo_datastore }} has
+          {{ ((demo_ds.value[0].free_space | int) / 1024 ** 4) | round(1) }} TB free.
+
+    - name: Look for an existing VM with the demo host name
+      vmware.vmware.guest_info:
+        name: "{{ demo_vm_name }}"
+        datacenter: "{{ demo_datacenter }}"
+        validate_certs: false
+      register: demo_existing
+
+    - name: Stop if a VM with the demo host name already exists
+      ansible.builtin.assert:
+        that:
+          - demo_existing.guests | length == 0
+        fail_msg: >-
+          A VM named {{ demo_vm_name }} already exists. Pick another demo date
+          or tear down the existing host first.
+        quiet: true
+
+    - name: Publish the values for the rest of the build
+      ansible.builtin.set_stats:
+        data:
+          owner: "{{ owner | default(awx_user_email) }}"
+          vm_name: "{{ demo_vm_name }}"
+          demo_flow: "{{ demo_flow }}"
+          demo_date: "{{ demo_date }}"
+        per_host: false
+
+    - name: Show the plan
+      ansible.builtin.debug:
+        msg: >-
+          Building {{ demo_vm_name }} for {{ owner | default(awx_user_email) }},
+          demo flow {{ demo_flow }}, demo date {{ demo_date }}.

@@ -3,9 +3,19 @@
     "name": "Web Server is Down_v2",
     "type": "service check",
     "query": "\"http.can_connect\".over(\"env:shadowman_v2\").by(\"host\").last(2).count_by_status()",
-    "message": "Web server down on {{host.name}} (demo lane v2)\n\n@webhook-EDA_Webhook_v2",
+    "message": "Host {{host.name}} with IP {{host.ip}} has a down web server (demo lane v2)\n\n\n@webhook-EDA_Webhook_v2",
     "tags": ["env:shadowman_v2", "demo-lane:v2"],
-    "options": {"notify_no_data": false, "renotify_interval": 0, "new_group_delay": 60}
+    "options": {
+      "thresholds": {"critical": 1, "warning": 1, "ok": 1},
+      "notify_audit": false,
+      "notify_no_data": false,
+      "renotify_interval": 0,
+      "timeout_h": 0,
+      "include_tags": false,
+      "new_group_delay": 60,
+      "notification_preset_name": "hide_handles"
+    },
+    "priority": null
   },
   {
     "name": "CPU Load is high_v2",
@@ -13,6 +23,14 @@
     "query": "max(last_1m):avg:system.cpu.idle{env:shadowman_v2} by {host} < 10",
     "message": "Host {{host.name}} with IP {{host.ip}} has high CPU usage (demo lane v2)\n\n@webhook-EDA_Webhook_v2",
     "tags": ["env:shadowman_v2", "demo-lane:v2"],
-    "options": {"thresholds": {"critical": 10}, "notify_no_data": false, "renotify_interval": 0, "new_group_delay": 0}
+    "options": {
+      "thresholds": {"critical": 10, "warning": 20},
+      "notify_audit": false,
+      "include_tags": false,
+      "notification_preset_name": "hide_handles",
+      "new_group_delay": 0,
+      "on_missing_data": "resolve"
+    },
+    "priority": null
   }
 ]
