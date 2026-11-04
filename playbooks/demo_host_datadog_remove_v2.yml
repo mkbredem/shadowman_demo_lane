@@ -1,0 +1,60 @@
+---
+# Teardown step (tracker step A3): stops Datadog from monitoring a demo host
+# before the VM is deleted.
+#
+# Stops and removes the Datadog agent on the host, so the host stops sending
+# metrics and service checks at once. The _v2 monitors do not alert on missing
+# data (notify_no_data is off) and the demo lane has no "Host not reporting
+# data" monitor, so nothing alerts. Datadog has no call to delete a host: the
+# host drops off the infrastructure list and host map 2 hours after its last
+# report.
+#
+# Why not "Uninstall Datadog Agent" (843): its default limit is
+# datadog.shadowman.dev,datadog.ad.shadowman.dev, so a launch without a limit
+# would remove the agent from the shared hosts. This playbook only accepts a
+# demo lane host name.
+#
+# Input: vm_name. If the host is already unreachable, the play reports it and
+# the teardown continues.
+- name: Check the demo host name
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Refuse anything that is not a demo lane host name
+      ansible.builtin.assert:
+        that:
+          - vm_name is defined
+          - vm_name is match('^[a-z0-9]+-[0-9]{4}-(ao|classic|ai|aimcp|snowlogs)-datadog\.shadowman\.dev$')
+        fail_msg: "{{ vm_name | default('vm_name (not set)') }} is not a demo lane host name. Nothing changed."
+        quiet: true
+
+- name: Stop Datadog monitoring of the demo host (demo lane v2)
+  hosts: "{{ vm_name }}"
+  gather_facts: false
+  become: true
+  ignore_unreachable: true
+
+  tasks:
+    - name: Stop and disable the Datadog agent
+      ansible.builtin.systemd_service:
+        name: datadog-agent
+        state: stopped
+        enabled: false
+      failed_when: false
+
+    - name: Remove the Datadog agent package
+      ansible.builtin.dnf:
+        name: datadog-agent
+        state: absent
+
+    - name: Remove the Datadog agent configuration
+      ansible.builtin.file:
+        path: /etc/datadog-agent
+        state: absent
+
+    - name: Report
+      ansible.builtin.debug:
+        msg: >-
+          Datadog agent removed from {{ inventory_hostname }}. The host leaves
+          the Datadog infrastructure list 2 hours after its last report.
