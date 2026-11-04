@@ -1,4 +1,4 @@
-# shadowman-demo-lane
+# shadowman_demo_lane
 
 Reservable, auto-named Datadog demo hosts for shadowman, kept on a separate
 "demo lane" so nothing in the existing Datadog setup changes.
@@ -52,7 +52,7 @@ Host names are not suffixed: `<user>-<MMDD>-<flow>-datadog.shadowman.dev`
 2. Credential `Datadog API Key_v2` of that type in Infrastructure, holding the
    same API key job template 842 uses today.
 3. Project `Shadowman Demo Lane_v2` in Infrastructure, pointing at
-   `https://github.com/mkbredem/shadowman-demo-lane`.
+   `https://github.com/mkbredem/shadowman_demo_lane`.
 4. Job template `Install and Configure Datadog Agent_v2`: copy of 842 settings
    (inventory Shadowman Production, same execution environment, become on,
    Ansible Linux Service Account), project `Shadowman Demo Lane_v2`, playbook
