@@ -1,0 +1,89 @@
+---
+# Adds or removes a demo host in the host drop-down of the simulation job
+# templates (tracker step A13):
+#   "AIOps Setup - Break HTTPD_v2"                    variable host_to_break
+#   "AIOps Setup - Cause High CPU for 300 seconds_v2" variable high_cpu_host
+#
+# The build workflow runs this with dropdown_action=add after the Datadog
+# agent is installed; the teardown runs it with dropdown_action=remove.
+#
+# ansible.controller.job_template replaces the whole survey, so this reads the
+# current survey first and changes only the choices of the one question. Run
+# it one at a time (the job template does not allow simultaneous runs), so two
+# builds cannot overwrite each other's change.
+#
+# A multiple choice question needs at least one choice. When the last demo
+# host is removed, the choice becomes "no-demo-host-reserved", which matches
+# no host in the inventory, so a launch changes nothing.
+#
+# Inputs: vm_name, dropdown_action (add or remove).
+# Credential: "Automation Controller Credentials" (sets CONTROLLER_HOST,
+# CONTROLLER_USERNAME and CONTROLLER_PASSWORD for the ansible.controller
+# collection).
+- name: Update the demo host drop-down on the simulation job templates (demo lane v2)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    demo_dropdown_templates:
+      - name: "AIOps Setup - Break HTTPD_v2"
+        variable: host_to_break
+      - name: "AIOps Setup - Cause High CPU for 300 seconds_v2"
+        variable: high_cpu_host
+    demo_placeholder: no-demo-host-reserved
+    demo_organization: Infrastructure
+
+  tasks:
+    - name: Check the inputs
+      ansible.builtin.assert:
+        that:
+          - vm_name is defined
+          - vm_name is match('^[a-z0-9]+-[0-9]{4}-(ao|classic|ai|aimcp|snowlogs)-datadog\.shadowman\.dev$')
+          - dropdown_action | default('') in ['add', 'remove']
+        fail_msg: >-
+          vm_name must be a demo lane host name and dropdown_action must be add
+          or remove.
+        quiet: true
+
+    - name: Find the simulation job templates
+      ansible.builtin.set_fact:
+        demo_templates_found: >-
+          {{ demo_templates_found | default([]) + [item | combine({'id': (lookup('ansible.controller.controller_api',
+             'job_templates', query_params={'name': item.name}, expect_one=true)).id})] }}
+      loop: "{{ demo_dropdown_templates }}"
+
+    - name: Read the current surveys
+      ansible.builtin.set_fact:
+        demo_surveys: >-
+          {{ demo_surveys | default({}) | combine({item.name: lookup('ansible.controller.controller_api',
+             'job_templates/' ~ item.id ~ '/survey_spec')}) }}
+      loop: "{{ demo_templates_found }}"
+
+    - name: Write the surveys back with the new choices
+      ansible.controller.job_template:
+        name: "{{ item.name }}"
+        organization: "{{ demo_organization }}"
+        survey_enabled: true
+        survey_spec: "{{ demo_surveys[item.name] | combine({'spec': demo_new_spec}) }}"
+      loop: "{{ demo_templates_found }}"
+      vars:
+        demo_old_spec: "{{ demo_surveys[item.name].spec }}"
+        demo_question: "{{ demo_old_spec | selectattr('variable', 'equalto', item.variable) | first }}"
+        demo_old_choices: >-
+          {{ (demo_question.choices if demo_question.choices is not string else demo_question.choices.split('\n'))
+             | reject('equalto', '') | reject('equalto', demo_placeholder) | list }}
+        demo_choices: >-
+          {{ (demo_old_choices + [vm_name]) | unique | sort
+             if dropdown_action == 'add' else
+             demo_old_choices | reject('equalto', vm_name) | list }}
+        demo_final_choices: "{{ demo_choices if demo_choices | length > 0 else [demo_placeholder] }}"
+        demo_new_question: >-
+          {{ demo_question | combine({'type': 'multiplechoice', 'choices': demo_final_choices,
+             'default': (demo_question.default if demo_question.default in demo_final_choices else demo_final_choices[0])}) }}
+        demo_new_spec: >-
+          {{ demo_old_spec | rejectattr('variable', 'equalto', item.variable) | list + [demo_new_question] }}
+
+    - name: Show the result
+      ansible.builtin.debug:
+        msg: "{{ dropdown_action }} {{ vm_name }}: done on {{ demo_templates_found | map(attribute='name') | join(' and ') }}"
