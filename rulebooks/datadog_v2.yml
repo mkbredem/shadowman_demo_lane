@@ -49,6 +49,7 @@
           job_args:
             extra_vars:
               vm_name: "{{ event.payload.hostname }}"
+              service_issue: "cpu"
 
     - name: Log demo lane alerts that no flow handles
       condition: >-
