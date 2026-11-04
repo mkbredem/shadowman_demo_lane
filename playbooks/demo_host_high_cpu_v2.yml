@@ -1,0 +1,58 @@
+---
+# Used by "AIOps Setup - Cause High CPU for 300 seconds_v2" (tracker step A13).
+#
+# Same load as shadowman-lab/Ansible-Eventdriven trigger_high_cpu.yml (role
+# trigger_high_cpu): one "yes > /dev/null" per vCPU for 300 seconds.
+# Added in front: only the host's owner (the user name at the start of the
+# host name) or a demo lane admin may load a demo host. No date limit.
+#
+# Input: high_cpu_host (survey drop-down of reserved demo hosts).
+- name: Check that the launching user owns the demo host
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    demo_admins: [mbredeme, adworjan]
+    demo_user: "{{ awx_user_name | default('') | lower | regex_replace('[^a-z0-9]', '') }}"
+    demo_owner: "{{ high_cpu_host | default('') | regex_replace('-.*$', '') }}"
+  tasks:
+    - name: Refuse a host that is not a demo lane host
+      ansible.builtin.assert:
+        that:
+          - high_cpu_host is defined
+          - high_cpu_host is match('^[a-z0-9]+-[0-9]{4}-(ao|classic|ai|aimcp|snowlogs)-datadog\.shadowman\.dev$')
+        fail_msg: "{{ high_cpu_host | default('high_cpu_host (not set)') }} is not a reserved demo lane host."
+        quiet: true
+
+    - name: Refuse a launching user who does not own the host
+      ansible.builtin.assert:
+        that:
+          - demo_user == demo_owner or demo_user in demo_admins
+        fail_msg: >-
+          {{ high_cpu_host }} belongs to {{ demo_owner }}. Only {{ demo_owner }}
+          or a demo lane admin ({{ demo_admins | join(', ') }}) may load it;
+          you are {{ demo_user }}. Reserve your own demo host.
+        quiet: true
+
+- name: Trigger High CPU for 300 seconds (demo lane v2)
+  hosts: "{{ high_cpu_host }}"
+  tasks:
+    - name: Trigger high CPU using a loop for total number of vcpus
+      ansible.builtin.shell: yes > /dev/null
+      loop: "{{ range(0, ansible_facts['processor_vcpus'], 1) | list }}"
+      register: async_results
+      changed_when: false
+      async: 300
+      poll: 0
+
+    - name: Wait 300 total seconds for the CPU task to complete
+      ansible.builtin.async_status:
+        jid: "{{ async_result_item.ansible_job_id }}"
+      loop: "{{ async_results.results }}"
+      loop_control:
+        loop_var: "async_result_item"
+      register: async_poll_results
+      failed_when: false
+      until: async_poll_results.finished | bool
+      retries: 30
+      delay: 10
