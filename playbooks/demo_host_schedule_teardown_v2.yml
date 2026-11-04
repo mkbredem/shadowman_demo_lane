@@ -1,0 +1,49 @@
+---
+# Last node of the workflow "Datadog Demo Host Build_v2" (tracker step A3).
+#
+# Creates a one-time schedule on the workflow "Datadog Demo Host Teardown_v2"
+# for the morning after the demo date, so every demo host is removed without
+# anyone remembering to do it.
+#
+# Inputs (set_stats from the plan job): vm_name, demo_date (YYYY-MM-DD).
+# Credential: "Automation Controller Credentials".
+- name: Schedule the teardown of a demo host (demo lane v2)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    demo_teardown_workflow: "Datadog Demo Host Teardown_v2"
+    demo_teardown_time: "06:00:00"
+    demo_timezone: America/New_York
+
+  tasks:
+    - name: Check the inputs
+      ansible.builtin.assert:
+        that:
+          - vm_name is defined
+          - vm_name is match('^[a-z0-9]+-[0-9]{4}-(ao|classic|ai|aimcp|snowlogs)-datadog\.shadowman\.dev$')
+          - demo_date is defined
+          - demo_date is match('^\d{4}-\d{2}-\d{2}$')
+        fail_msg: vm_name must be a demo lane host name and demo_date must be YYYY-MM-DD.
+        quiet: true
+
+    - name: Work out the teardown time (the morning after the demo)
+      ansible.builtin.set_fact:
+        demo_teardown_start: >-
+          {{ '%Y-%m-%d' | strftime(((demo_date | to_datetime('%Y-%m-%d')).timestamp() + 86400) | int) }} {{ demo_teardown_time }}
+
+    - name: Create the one-time teardown schedule
+      ansible.controller.schedule:
+        name: "Teardown {{ vm_name }}"
+        description: "Demo lane v2: removes {{ vm_name }} the morning after its demo ({{ demo_date }})."
+        unified_job_template: "{{ demo_teardown_workflow }}"
+        rrule: "{{ lookup('ansible.controller.schedule_rrule', 'none', start_date=demo_teardown_start, timezone=demo_timezone) }}"
+        extra_data:
+          vm_name: "{{ vm_name }}"
+        enabled: true
+        state: present
+
+    - name: Show the schedule
+      ansible.builtin.debug:
+        msg: "{{ vm_name }} will be torn down at {{ demo_teardown_start }} {{ demo_timezone }}."
