@@ -8,7 +8,7 @@
 # saved on the workflow nodes.
 #
 # Inputs (workflow survey):
-#   demo_flow  - ao (Phase 1); later ai, aimcp, classic, snowlogs
+#   demo_flow  - ao or classic; later ai, aimcp, snowlogs
 #   demo_date  - YYYY-MM-DD, the day of the demo
 #   owner      - required launch variable: the requester's email address
 #
@@ -26,7 +26,7 @@
   gather_facts: false
 
   vars:
-    demo_flows_allowed: [ao]
+    demo_flows_allowed: [ao, classic]
     demo_datacenter: Shadowman-DC
     demo_datastore: vsanDatastore
     demo_min_free_tb: 10

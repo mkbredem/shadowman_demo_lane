@@ -1,9 +1,16 @@
 ---
 # Used by "AIOps Setup - Break HTTPD_v2" (tracker step A13).
 #
-# Same change as shadowman-lab/Ansible-Eventdriven httpd_break.yml (role
-# httpd_break): adds the line InvalidDirectiveHere after ServerRoot in
-# /etc/httpd/conf/httpd.conf and restarts httpd, which then fails to start.
+# The break depends on the demo flow in the host name, so that each flow's
+# remediation can fix it:
+#   ao (and the AI flows): same change as shadowman-lab/Ansible-Eventdriven
+#     httpd_break.yml (role httpd_break). Adds the line InvalidDirectiveHere
+#     after ServerRoot in /etc/httpd/conf/httpd.conf and restarts httpd, which
+#     then fails to start. The AI path reads the log and restores httpd.conf.
+#   classic: stops httpd (systemctl stop httpd), the same as job template
+#     "Web Application Stop" (1007). The classic remediation, "Automated
+#     Response Web Server EDA" -> "Restart and Verify Web App" (300), only
+#     starts httpd, so it cannot fix a broken httpd.conf.
 # Added in front: only the host's owner (the user name at the start of the
 # host name) or a demo lane admin may break a demo host. No date limit: the
 # owner may rehearse on any day until the teardown.
@@ -40,8 +47,19 @@
   hosts: "{{ host_to_break }}"
   gather_facts: false
   become: true
+  vars:
+    # Host name <user>-<MMDD>-<flow>-datadog.shadowman.dev (checked above):
+    # the third part is the demo flow.
+    demo_flow: "{{ inventory_hostname.split('-')[2] }}"
   tasks:
-    - name: Add InvalidDirectiveHere
+    - name: Stop httpd (classic flow)
+      ansible.builtin.systemd_service:
+        name: httpd
+        state: stopped
+      when: demo_flow == 'classic'
+
+    - name: Add InvalidDirectiveHere (ao and AI flows)
+      when: demo_flow != 'classic'
       ansible.builtin.lineinfile:
         path: /etc/httpd/conf/httpd.conf
         insertafter: '^ServerRoot'
