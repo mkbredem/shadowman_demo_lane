@@ -1,0 +1,80 @@
+---
+# Build step (classic flow): turns on CPU hot-add on a demo lane VM.
+#
+# The classic CPU fix, "Automated Response High CPU EDA" -> "Increase VM CPU"
+# (job template 310, role shadowman_cores in shadowman-lab/Ansible-Eventdriven),
+# adds one core with vmware.vmware.vm while the VM is running. vCenter allows
+# that only when CPU hot-add is on. datadog.shadowman.dev has it on; demo lane
+# VMs come from the lab template with it off (seen on
+# mbredeme-1104-ao-datadog.shadowman.dev, Nov 5, 2026).
+#
+# Turning hot-add on needs the VM powered off. allow_power_cycling lets the
+# module power the VM off (hard power-off), change the setting and power it on
+# again. Run it right after the VM is built, before anyone demos on it, and
+# wait for SSH before the next step. If hot-add is already on, nothing changes.
+#
+# Input: vm_name. Refuses any name that is not a demo lane host name.
+# Credential: "VMWare VCenter Env Cred".
+- name: Turn on CPU hot-add on a demo lane VM (demo lane v2)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    demo_datacenter: Shadowman-DC
+
+  tasks:
+    - name: Refuse anything that is not a demo lane host name
+      ansible.builtin.assert:
+        that:
+          - vm_name is defined
+          - vm_name is match('^[a-z0-9]+-[0-9]{4}-(ao|classic|ai|aimcp|snowlogs)-datadog\.shadowman\.dev$')
+        fail_msg: "{{ vm_name | default('vm_name (not set)') }} is not a demo lane host name. Nothing changed."
+        quiet: true
+
+    - name: Look up the VM in vCenter
+      vmware.vmware_rest.vcenter_vm_info:
+        names:
+          - "{{ vm_name }}"
+        vcenter_validate_certs: false
+      register: demo_vm
+
+    - name: Stop unless exactly one VM has this name
+      ansible.builtin.assert:
+        that:
+          - demo_vm.value | length == 1
+        fail_msg: "{{ demo_vm.value | length }} VMs are named {{ vm_name }}. Nothing changed."
+        quiet: true
+
+    - name: Read the VM's CPU settings
+      vmware.vmware.vm_resource_info:
+        moid: "{{ demo_vm.value[0].vm }}"
+        validate_certs: false
+      register: demo_resources
+
+    - name: Show the CPU settings before the change
+      ansible.builtin.debug:
+        msg: >-
+          {{ vm_name }}: {{ demo_resources.vms[0].cpu.processor_count }} CPUs,
+          hot-add {{ demo_resources.vms[0].cpu.hot_add_enabled }}
+
+    - name: Turn on CPU hot-add (powers the VM off and on if needed)
+      vmware.vmware.vm:
+        moid: "{{ demo_vm.value[0].vm }}"
+        datacenter: "{{ demo_datacenter }}"
+        cpu:
+          cores: "{{ demo_resources.vms[0].cpu.processor_count }}"
+          enable_hot_add: true
+        allow_power_cycling: true
+        validate_certs: false
+      register: demo_hotadd
+      when: not demo_resources.vms[0].cpu.hot_add_enabled
+
+- name: Wait until the demo host answers on SSH again
+  hosts: "{{ vm_name }}"
+  gather_facts: false
+  tasks:
+    - name: Wait for the connection
+      ansible.builtin.wait_for_connection:
+        delay: 10
+        timeout: 600
