@@ -31,10 +31,14 @@
     demo_datastore: vsanDatastore
     demo_min_free_tb: 10
     demo_domain: shadowman.dev
-    # demo_requester comes from "Reserve Datadog Demo Host_v2", which launches
-    # this workflow with a service credential: awx_user_name would then be the
-    # service account, not the SSA who reserved the host.
-    requester: "{{ demo_requester | default(awx_user_name) | default('') | lower | regex_replace('[^a-z0-9]', '') }}"
+    # Launches from "Reserve Datadog Demo Host_v2" and from ServiceNow use a
+    # service account, so awx_user_name names that account, not the SSA.
+    # demo_requester (Reserve passes it) or owner (ServiceNow passes it) wins.
+    requester: >-
+      {{ (demo_requester | default('', true)
+          or (owner | default('', true)).split('@')[0]
+          or awx_user_name | default(''))
+         | lower | regex_replace('[^a-z0-9]', '') }}
 
   tasks:
     - name: Check the survey answers
@@ -52,21 +56,23 @@
           launching AAP user must have a user name.
         quiet: true
 
-    # owner has to be set when the workflow is launched, not here: the survey
-    # of workflow 646 answers owner with a blank value, and a nested
+    # owner must arrive with the launch of "Datadog Demo Host Build_v2" (its
+    # survey question, or a launch variable), not from set_stats here: the
+    # survey of workflow 646 answers owner with a blank value, and a nested
     # workflow's survey answer takes precedence over set_stats values from
-    # earlier nodes. Only a variable given at launch of "Datadog Demo Host
-    # Build_v2" reaches the jobs inside 646. The reservation (step A5) passes
-    # owner from the reserving user's awx_user_email.
+    # earlier nodes, while launch values do reach the jobs inside 646.
+    # Reserve Datadog Demo Host_v2 (1541) fills it from the reserving user's
+    # awx_user_email; ServiceNow fills it from the request, because it launches
+    # with a service account whose awx_user_email is not the requester's.
     - name: Stop if owner was not given when the workflow was launched
       ansible.builtin.assert:
         that:
           - owner is defined
           - owner is match('^[^@ ]+@[^@ ]+$')
         fail_msg: >-
-          Launch "Datadog Demo Host Build_v2" with the variable owner set to
-          the requester's email address (the reservation does this from
-          awx_user_email). Launched by {{ awx_user_name | default('unknown') }}
+          Answer owner with the requester's email address (Reserve Datadog
+          Demo Host_v2 does this from awx_user_email; ServiceNow from the
+          request). Launched by {{ awx_user_name | default('unknown') }}
           ({{ awx_user_email | default('no email') }}).
         quiet: true
 

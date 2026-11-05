@@ -10,7 +10,13 @@
 # awx_user_email) and launches the build with owner set, so nobody types
 # anything but the demo flow and date.
 #
-# Survey: demo_flow, demo_date (YYYY-MM-DD).
+# Survey: demo_flow, demo_date (YYYY-MM-DD), owner (blank default).
+#
+# owner and demo_requester: an SSA leaves owner blank and this job uses the
+# launching user's awx_user_email and awx_user_name. ServiceNow launches with
+# a service account, so it fills in owner (the requester's email) and may
+# pass demo_requester (the requester's AAP user name); without
+# demo_requester the host name uses the part of owner before the @.
 # Credential: "Automation Controller Credentials".
 - name: Reserve a Datadog demo host (demo lane v2)
   hosts: localhost
@@ -19,6 +25,10 @@
 
   vars:
     demo_build_workflow: "Datadog Demo Host Build_v2"
+    demo_owner: "{{ owner | default('', true) or awx_user_email | default('') }}"
+    demo_requester_name: >-
+      {{ demo_requester | default('', true)
+         or ((owner | default('', true)).split('@')[0] if owner | default('', true) else awx_user_name | default('')) }}"
 
   tasks:
     - name: Check the survey answers and the launching user
@@ -27,20 +37,21 @@
           - demo_flow is defined
           - demo_date is defined
           - demo_date is match('^\d{4}-\d{2}-\d{2}$')
-          - awx_user_email is defined
-          - awx_user_email | length > 0
-          - awx_user_name is defined
+          - demo_owner is match('^[^@ ]+@[^@ ]+$')
+          - demo_requester_name | trim | length > 0
         fail_msg: >-
-          Pick a demo flow and a demo date (YYYY-MM-DD). Your AAP user
-          {{ awx_user_name | default('unknown') }} also needs an email address.
+          Pick a demo flow and a demo date (YYYY-MM-DD). owner must be an email
+          address: leave it blank to use your AAP email; AAP user
+          {{ awx_user_name | default('unknown') }} has
+          {{ awx_user_email | default('no email', true) }}.
         quiet: true
 
     - name: Launch the build for the launching user
       ansible.controller.workflow_launch:
         name: "{{ demo_build_workflow }}"
         extra_vars:
-          owner: "{{ awx_user_email }}"
-          demo_requester: "{{ awx_user_name }}"
+          owner: "{{ demo_owner }}"
+          demo_requester: "{{ demo_requester_name | trim }}"
           demo_flow: "{{ demo_flow }}"
           demo_date: "{{ demo_date }}"
         wait: false
@@ -49,7 +60,7 @@
     - name: Show where to follow the build
       ansible.builtin.debug:
         msg: >-
-          Building the {{ demo_flow }} demo host for {{ awx_user_name }} (demo
+          Building the {{ demo_flow }} demo host for {{ demo_requester_name | trim }} ({{ demo_owner }}) (demo
           date {{ demo_date }}). Follow workflow job {{ demo_build.id }} under
           Jobs. When it finishes, the host appears in the drop-downs of
           "AIOps Setup - Break HTTPD_v2" and "AIOps Setup - Cause High CPU for
