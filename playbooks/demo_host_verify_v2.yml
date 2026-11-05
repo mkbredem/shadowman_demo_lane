@@ -7,6 +7,13 @@
 # inventory end successful with "no hosts matched". This check fails the build
 # when the new host is not in the job's inventory (Shadowman Production), so a
 # failed VM build stops the workflow instead of reporting success.
+#
+# Then it turns on CPU hot-add on the new VM (demo_host_cpu_hotadd_v2.yml),
+# which the classic CPU fix needs. Done here so the build gets no extra node
+# (Michael chose this on Nov 5, 2026 over changing the shared provisioning
+# role or template). It powers the VM off and on once, about 20 seconds.
+#
+# Credentials: "VMWare VCenter Env Cred" and "Ansible Linux Service Account".
 - name: Check that the demo host was built (demo lane v2)
   hosts: localhost
   connection: local
@@ -23,3 +30,6 @@
           The VM build in "Multi Hypervisor Create and Config VM" did not
           finish; check that workflow's jobs.
         success_msg: "{{ vm_name }} is in the inventory."
+
+- name: Turn on CPU hot-add
+  ansible.builtin.import_playbook: demo_host_cpu_hotadd_v2.yml

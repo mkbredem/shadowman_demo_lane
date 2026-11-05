@@ -1,5 +1,7 @@
 ---
-# Build step (classic flow): turns on CPU hot-add on a demo lane VM.
+# Build step: turns on CPU hot-add on a demo lane VM. Imported by
+# demo_host_verify_v2.yml (Datadog Demo Host Verify_v2); job template
+# Datadog Demo Host CPU Hot-Add_v2 runs it on its own for an existing host.
 #
 # The classic CPU fix, "Automated Response High CPU EDA" -> "Increase VM CPU"
 # (job template 310, role shadowman_cores in shadowman-lab/Ansible-Eventdriven),
