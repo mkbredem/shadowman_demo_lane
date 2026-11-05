@@ -10,7 +10,9 @@
 # awx_user_email) and launches the build with owner set, so nobody types
 # anything but the demo flow and date.
 #
-# Survey: demo_flow, demo_date (YYYY-MM-DD), owner (blank default).
+# Survey: demo_flow, demo_date (YYYY-MM-DD), owner (optional, blank default).
+# The Build_v2 survey requires owner: only this job can fall back to
+# awx_user_email.
 #
 # owner and demo_requester: an SSA leaves owner blank and this job uses the
 # launching user's awx_user_email and awx_user_name. ServiceNow launches with

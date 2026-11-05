@@ -70,9 +70,10 @@
           - owner is defined
           - owner is match('^[^@ ]+@[^@ ]+$')
         fail_msg: >-
-          Answer owner with the requester's email address (Reserve Datadog
-          Demo Host_v2 does this from awx_user_email; ServiceNow from the
-          request). Launched by {{ awx_user_name | default('unknown') }}
+          owner is empty. When you launch "Datadog Demo Host Build_v2"
+          yourself, type your email address in owner, or launch "Reserve
+          Datadog Demo Host_v2" instead, which fills owner in from your AAP
+          user. ServiceNow fills it in from the request. Launched by {{ awx_user_name | default('unknown') }}
           ({{ awx_user_email | default('no email') }}).
         quiet: true
 
