@@ -1,5 +1,5 @@
 ---
-# Demo lane rulebook. Flows: ao (Phase 1), classic (Phase 2).
+# Demo lane rulebook. Flows: ao (Phase 1), classic and ai (Phase 2).
 # Listens only to the Datadog_v2 event stream, which receives alerts from the
 # Datadog monitors "Web Server is Down_v2" and "CPU Load is high_v2"
 # (scope env:shadowman_v2). The legacy "Datadog" event stream and its five
@@ -12,7 +12,10 @@
 # datadog.yml), limited to -classic- hosts. Its "Host not reporting data" rule
 # is left out on purpose: the demo lane has no such monitor, so a teardown
 # never raises an alert.
-# Still to come: ai, aimcp, snowlogs.
+# The ai rules are the rules of activation 10 "Datadog AI" (rulebook
+# datadogai.yml), limited to -ai- hosts ("-ai-datadog." does not match
+# -aimcp- hosts). Host not reporting data rule left out, as for classic.
+# Still to come: aimcp, snowlogs.
 #
 # Activation extra variables:
 #   ao_webhook_path: c8c4e8c2-9a00-4ee2-a1cc-03c5f87a6798   (AIOps Workflow With EDA trigger)
@@ -80,10 +83,36 @@
             extra_vars:
               vm_name: "{{ event.payload.hostname }}"
 
+    - name: AI flow - Web Application Down Detected
+      condition: >-
+        event.payload.event_title == "[Triggered] Web Server is Down_v2"
+        and event.payload.hostname is search("-ai-datadog[.]", ignorecase=true)
+      action:
+        run_workflow_template:
+          name: "Ansible AI Response"
+          organization: Infrastructure
+          job_args:
+            extra_vars:
+              vm_name: "{{ event.payload.hostname }}"
+              service_issue: "httpd"
+
+    - name: AI flow - High CPU Usage Detected
+      condition: >-
+        event.payload.event_title == "[Triggered] CPU Load is high_v2"
+        and event.payload.hostname is search("-ai-datadog[.]", ignorecase=true)
+      action:
+        run_workflow_template:
+          name: "Ansible AI Enrichment CPU"
+          organization: Infrastructure
+          job_args:
+            extra_vars:
+              vm_name: "{{ event.payload.hostname }}"
+              service_issue: "cpu"
+
     - name: Log demo lane alerts that no flow handles
       condition: >-
         event.payload.event_title is defined
-        and not (event.payload.hostname is search("-(ao|classic)-datadog[.]", ignorecase=true))
+        and not (event.payload.hostname is search("-(ao|classic|ai)-datadog[.]", ignorecase=true))
       action:
         debug:
           msg: "No demo flow matched {{ event.payload.hostname }}: {{ event.payload.event_title }}"

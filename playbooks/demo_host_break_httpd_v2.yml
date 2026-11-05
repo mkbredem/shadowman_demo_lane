@@ -3,10 +3,10 @@
 #
 # The break depends on the demo flow in the host name, so that each flow's
 # remediation can fix it:
-#   ao (and the AI flows): same change as shadowman-lab/Ansible-Eventdriven
+#   ao, ai (and the other AI flows): same change as shadowman-lab/Ansible-Eventdriven
 #     httpd_break.yml (role httpd_break). Adds the line InvalidDirectiveHere
 #     after ServerRoot in /etc/httpd/conf/httpd.conf and restarts httpd, which
-#     then fails to start. The AI path reads the log and restores httpd.conf.
+#     then fails to start. The AI paths read the log and restore httpd.conf.
 #   classic: stops httpd (systemctl stop httpd), the same as job template
 #     "Web Application Stop" (1007). The classic remediation, "Automated
 #     Response Web Server EDA" -> "Restart and Verify Web App" (300), only
