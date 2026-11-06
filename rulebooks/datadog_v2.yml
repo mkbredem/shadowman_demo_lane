@@ -157,9 +157,7 @@
     - name: Log demo lane alerts that no flow handles
       condition: >-
         event.payload.event_title is defined
-        and not (event.payload.hostname is search("-(ao|classic|ai|aimcp)-datadog[.]", ignorecase=true)
-                 or (event.payload.hostname is search("-snowlogs-datadog[.]", ignorecase=true)
-                     and event.payload.event_title == "[Triggered] CPU Load is high_v2"))
+        and not (event.payload.hostname is search("-(ao|classic|ai|aimcp)-datadog[.]", ignorecase=true) or (event.payload.hostname is search("-snowlogs-datadog[.]", ignorecase=true) and event.payload.event_title == "[Triggered] CPU Load is high_v2"))
       action:
         debug:
           msg: "No demo flow matched {{ event.payload.hostname }}: {{ event.payload.event_title }}"
