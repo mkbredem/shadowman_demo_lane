@@ -10,9 +10,17 @@
 # Inputs (workflow survey):
 #   demo_flow  - ao, classic, ai or aimcp; later snowlogs
 #   demo_date  - YYYY-MM-DD, the day of the demo
-#   owner      - required launch variable: the requester's email address
+#   owner      - required: the requester's email address. SSAs type it;
+#                ServiceNow fills it in from the request.
+#   demo_requester - optional: the requester's AAP user name
 #
-# Host name: <AAP user name>-<MMDD>-<demo_flow>-datadog.shadowman.dev
+# This workflow is the only entry point: the job template "Reserve Datadog
+# Demo Host_v2" was removed Nov 6, 2026, and SSAs and ServiceNow both launch
+# "Datadog Demo Host Build_v2".
+#
+# Host name: <requester>-<MMDD>-<demo_flow>-datadog.shadowman.dev, where
+# requester is demo_requester, else the part of owner before the @, else the
+# launching AAP user name.
 # Hyphens, not underscores: underscores are not valid in DNS host names.
 #
 # Credential: "VMWare VCenter Env Cred" (sets VMWARE_HOST, VMWARE_USER and
@@ -31,9 +39,11 @@
     demo_datastore: vsanDatastore
     demo_min_free_tb: 10
     demo_domain: shadowman.dev
-    # Launches from "Reserve Datadog Demo Host_v2" and from ServiceNow use a
-    # service account, so awx_user_name names that account, not the SSA.
-    # demo_requester (Reserve passes it) or owner (ServiceNow passes it) wins.
+    # ServiceNow launches with a service account, so awx_user_name names that
+    # account, not the SSA: demo_requester, else owner, decides the name.
+    # The break and high CPU jobs only accept the user whose name starts the
+    # host name, so owner's part before the @ should be the AAP user name
+    # (true for <user>@shadowman.dev); otherwise pass demo_requester.
     requester: >-
       {{ (demo_requester | default('', true)
           or (owner | default('', true)).split('@')[0]
@@ -52,28 +62,25 @@
           - requester | length > 0
         fail_msg: >-
           demo_flow must be one of {{ demo_flows_allowed | join(', ') }},
-          demo_date must be today or later in the form YYYY-MM-DD, and the
-          launching AAP user must have a user name.
+          demo_date must be today or later in the form YYYY-MM-DD, and owner
+          must be an email address.
         quiet: true
 
     # owner must arrive with the launch of "Datadog Demo Host Build_v2" (its
-    # survey question, or a launch variable), not from set_stats here: the
-    # survey of workflow 646 answers owner with a blank value, and a nested
-    # workflow's survey answer takes precedence over set_stats values from
-    # earlier nodes, while launch values do reach the jobs inside 646.
-    # Reserve Datadog Demo Host_v2 (1541) fills it from the reserving user's
-    # awx_user_email; ServiceNow fills it from the request, because it launches
-    # with a service account whose awx_user_email is not the requester's.
+    # required survey question), so this playbook cannot fall back to
+    # awx_user_email: the survey of workflow 646 answers owner with a blank
+    # value, and a nested workflow's survey answer takes precedence over
+    # set_stats values from earlier nodes, while launch values do reach the
+    # jobs inside 646. 646 tags the VM with owner in vCenter.
     - name: Stop if owner was not given when the workflow was launched
       ansible.builtin.assert:
         that:
           - owner is defined
           - owner is match('^[^@ ]+@[^@ ]+$')
         fail_msg: >-
-          owner is empty. When you launch "Datadog Demo Host Build_v2"
-          yourself, type your email address in owner, or launch "Reserve
-          Datadog Demo Host_v2" instead, which fills owner in from your AAP
-          user. ServiceNow fills it in from the request. Launched by {{ awx_user_name | default('unknown') }}
+          owner is empty or not an email address. Type your email address in
+          owner when you launch "Datadog Demo Host Build_v2" (ServiceNow fills
+          it in from the request). Launched by {{ awx_user_name | default('unknown') }}
           ({{ awx_user_email | default('no email') }}).
         quiet: true
 
