@@ -8,7 +8,7 @@
 # saved on the workflow nodes.
 #
 # Inputs (workflow survey):
-#   demo_flow  - ao, classic, ai or aimcp; later snowlogs
+#   demo_flow  - ao, classic, ai, aimcp or snowlogs (snowlogs: high CPU only)
 #   demo_date  - YYYY-MM-DD, the day of the demo
 #   owner      - required: the requester's email address. SSAs type it;
 #                ServiceNow fills it in from the request.
@@ -34,7 +34,7 @@
   gather_facts: false
 
   vars:
-    demo_flows_allowed: [ao, classic, ai, aimcp]
+    demo_flows_allowed: [ao, classic, ai, aimcp, snowlogs]
     demo_datacenter: Shadowman-DC
     demo_datastore: vsanDatastore
     demo_min_free_tb: 10
