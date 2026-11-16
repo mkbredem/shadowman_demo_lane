@@ -32,5 +32,27 @@
       "on_missing_data": "resolve"
     },
     "priority": null
-  }
+  },
+  {
+	"name": "Disk Usage is high_v2",
+	"type": "query alert",
+	"query": "max(last_1m):avg:system.disk.utilized{env:shadowman_v2} by {host,device} > 95",
+	"message": "Host {{host.name}} with IP {{host.ip}} has high disk usage (demo lane v2)\n\n@webhook-EDA_Webhook_v2",
+	"tags": [
+		"env:shadowman_v2",
+		"demo-lane:v2"
+	],
+	"options": {
+		"thresholds": {
+			"critical": 95,
+			"warning": 80
+		},
+		"notify_audit": false,
+		"include_tags": false,
+		"notification_preset_name": "hide_handles",
+		"new_group_delay": 0,
+		"on_missing_data": "show_no_data"
+	},
+	"priority": null
+}
 ]
