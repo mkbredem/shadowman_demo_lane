@@ -3,6 +3,8 @@
 # templates (tracker step A13):
 #   "AIOps Setup - Break HTTPD_v2"                    variable host_to_break
 #   "AIOps Setup - Cause High CPU for 300 seconds_v2" variable high_cpu_host
+#   "Disk Issue Setup - Simulate Full /var/log_v2"    variable full_disk_host
+#                                                     (-ao- hosts only)
 #
 # The build workflow runs this with dropdown_action=add after the Datadog
 # agent is installed; the teardown runs it with dropdown_action=remove.
@@ -31,6 +33,9 @@
         variable: host_to_break
       - name: "AIOps Setup - Cause High CPU for 300 seconds_v2"
         variable: high_cpu_host
+      - name: "Disk Issue Setup - Simulate Full /var/log_v2"
+        variable: full_disk_host
+        flows: [ao]
     demo_placeholder: no-demo-host-reserved
     demo_organization: Infrastructure
 
@@ -73,9 +78,10 @@
         demo_old_choices: >-
           {{ (demo_question.choices if demo_question.choices is not string else demo_question.choices.split('\n'))
              | reject('equalto', '') | reject('equalto', demo_placeholder) | list }}
+        demo_host_flow: "{{ vm_name.split('-')[2] }}"
         demo_choices: >-
           {{ (demo_old_choices + [vm_name]) | unique | sort
-             if dropdown_action == 'add' else
+             if dropdown_action == 'add' and demo_host_flow in item.flows | default([demo_host_flow]) else
              demo_old_choices | reject('equalto', vm_name) | list }}
         demo_final_choices: "{{ demo_choices if demo_choices | length > 0 else [demo_placeholder] }}"
         demo_new_question: >-
